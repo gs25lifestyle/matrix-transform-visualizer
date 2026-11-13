@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>선형변환 실험실</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ground: #edf3f2;
+    --ink: #172622;
+    --muted: #4d6059;
+    --line: #d9e4df;
+    --accent: #087a68;
+    font: 16px/1.5 "Instrument Sans", "Malgun Gothic", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); }
+  header { max-width: 1220px; margin: auto; padding: 12px 24px; font-weight: 650; }
+  header span { color: var(--accent); margin-right: 8px; }
+  main {
+    max-width: 1220px; margin: 0 auto 8px; background: white; border: 1px solid var(--line);
+    border-radius: 16px; padding: clamp(16px, 3vw, 36px);
+  }
+  h1 { font-size: 28px; margin: 0; }
+  h2 { font-size: 18px; margin: 0 0 12px; }
+  p { margin: 6px 0 0; color: var(--muted); }
+  .workspace { display: grid; grid-template-columns: 275px minmax(0, 1fr); gap: 28px; margin-top: 24px; }
+  aside { display: grid; align-content: start; gap: 24px; }
+  .equation { display: flex; align-items: center; gap: 12px; }
+  fieldset { min-width: 0; margin: 0; border: 0; padding: 0; }
+  legend { font-weight: 650; margin-bottom: 8px; }
+  .entries {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 60px)); gap: 6px; padding: 4px 6px;
+    border-inline: 2px solid var(--ink); border-radius: 5px;
+  }
+  .entries.vector { grid-template-columns: minmax(0, 64px); }
+  input, button { font: inherit; color: inherit; }
+  input[type=number] {
+    width: 100%; height: 44px; text-align: center; appearance: textfield; padding: 0 2px;
+    background: #f6f9f8; border: 1px solid #bdcdc6; border-radius: 6px; font-variant-numeric: tabular-nums;
+  }
+  input::-webkit-inner-spin-button { appearance: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { min-height: 44px; padding: 4px 9px; background: white; border: 1px solid #bdcdc6; border-radius: 6px; cursor: pointer; }
+  button:hover { background: var(--ground); }
+  .results { margin: 0; display: grid; gap: 8px; }
+  .results div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  .results dt { color: var(--muted); }
+  .results dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .plot { min-width: 0; }
+  canvas { width: 100%; height: clamp(270px, 51vw, 520px); display: block; border: 1px solid var(--line); border-radius: 10px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0; color: var(--muted); font-size: 14px; }
+  .legend span::before { content: ""; display: inline-block; width: 20px; margin-right: 6px; vertical-align: middle; border-top: 2px dashed var(--muted); }
+  .legend span + span::before { border-top: 3px solid var(--accent); }
+  .slider { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 12px; }
+  .slider input { grid-column: 1 / -1; width: 100%; margin: 0; min-height: 44px; accent-color: var(--accent); }
+  #error { color: #9d2727; }
+  [hidden] { display: none; }
+  @media (max-width: 690px) {
+    header { padding-inline: 16px; }
+    main { margin-inline: 8px; }
+    .workspace { grid-template-columns: 1fr; gap: 22px; }
+    aside { gap: 14px; }
+  }
+</style>
+<header><span aria-hidden="true">↗</span>선형변환 실험실</header>
+<main>
+  <h1>행렬이 벡터를 움직이는 법</h1>
+  <p>행렬 A와 벡터 x를 입력하고, 슬라이더로 x가 Ax로 이동하는 모습을 살펴보세요.</p>
+  <div class="workspace">
+    <aside aria-label="입력과 계산 결과">
+      <div class="equation">
+        <fieldset>
+          <legend>행렬 A</legend>
+          <div class="entries">
+            <input type="number" step="any" value="1" aria-label="A의 1행 1열">
+            <input type="number" step="any" value="2" aria-label="A의 1행 2열">
+            <input type="number" step="any" value="3" aria-label="A의 2행 1열">
+            <input type="number" step="any" value="4" aria-label="A의 2행 2열">
+          </div>
+        </fieldset>
+        <span aria-hidden="true">×</span>
+        <fieldset>
+          <legend>벡터 x</legend>
+          <div class="entries vector">
+            <input type="number" step="any" value="1" aria-label="x의 첫 번째 좌표">
+            <input type="number" step="any" value="0" aria-label="x의 두 번째 좌표">
+          </div>
+        </fieldset>
+      </div>
+      <div class="presets" aria-label="행렬 예시">
+        <button type="button" data-matrix="1,2,3,4">앞의 예제</button>
+        <button type="button" data-matrix="1,2,1,2">같은 두 행</button>
+        <button type="button" data-matrix="0,-1,1,0">90° 회전</button>
+      </div>
+      <p id="error" role="alert" hidden></p>
+      <dl class="results" aria-label="최종 결과" aria-live="polite">
+        <div><dt>Ax</dt><dd id="product">(1, 3)</dd></div>
+        <div><dt>det A</dt><dd id="determinant">−2</dd></div>
+        <div><dt>최종 넓이</dt><dd id="area">2</dd></div>
+        <div><dt>방향</dt><dd id="orientation">뒤집힘</dd></div>
+      </dl>
+    </aside>
+    <section class="plot">
+      <h2>좌표평면</h2>
+      <canvas role="img" aria-label="원래 단위 정사각형과 변환된 평행사변형, 벡터 x의 이동"></canvas>
+      <div class="legend"><span>원래 도형과 x</span><span>변환 중인 도형과 벡터</span></div>
+      <div class="slider">
+        <label for="progress">변환 진행</label><output for="progress" id="percent">100%</output>
+        <input type="range" id="progress" min="0" max="100" value="100">
+      </div>
+    </section>
+  </div>
+  <noscript><p>그래프를 그리려면 JavaScript를 켜 주세요.</p></noscript>
+</main>
+<script>
+  const fields = [...document.querySelectorAll('input[type=number]')];
+  const slider = document.querySelector('#progress');
+  const canvas = document.querySelector('canvas');
+  const context = canvas.getContext('2d');
+  const error = document.querySelector('#error');
+  const square = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const format = value => String(Number(value.toPrecision(8))).replace(/^-/,'−');
+  const pair = ([x, y]) => '(' + format(x) + ', ' + format(y) + ')';
+  const colors = getComputedStyle(document.documentElement);
+  const accent = colors.getPropertyValue('--accent').trim();
+  const muted = colors.getPropertyValue('--muted').trim();
+  const gridColor = colors.getPropertyValue('--line').trim();
+
+  function line(from, to) {
+    context.beginPath();
+    context.moveTo(...from);
+    context.lineTo(...to);
+    context.stroke();
+  }
+
+  function arrow(origin, tip) {
+    line(origin, tip);
+    const dx = tip[0] - origin[0];
+    const dy = tip[1] - origin[1];
+    const length = Math.hypot(dx, dy);
+    context.beginPath();
+    if (length < 3) {
+      context.arc(...tip, 3, 0, 2 * Math.PI);
+    } else {
+      const size = Math.min(length, 11);
+      const angle = Math.atan2(dy, dx);
+      context.moveTo(...tip);
+      for (const offset of [-0.45, 0.45]) {
+        context.lineTo(tip[0] - size * Math.cos(angle + offset), tip[1] - size * Math.sin(angle + offset));
+      }
+      context.closePath();
+    }
+    context.fillStyle = context.strokeStyle;
+    context.fill();
+  }
+
+  function polygon(points, filled) {
+    context.beginPath();
+    context.moveTo(...points[0]);
+    points.slice(1).forEach(point => context.lineTo(...point));
+    context.closePath();
+    if (filled) {
+      context.globalAlpha = 0.15;
+      context.fillStyle = accent;
+      context.fill();
+      context.globalAlpha = 1;
+    }
+    context.stroke();
+  }
+
+  function draw(vector, product, finalSquare, t) {
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const density = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * density);
+    canvas.height = Math.round(height * density);
+    context.setTransform(density, 0, 0, density, 0, 0);
+    if (!vector) return;
+
+    const allPoints = [...square, ...finalSquare, vector, product];
+    const extent = Math.max(2, ...allPoints.flat().map(Math.abs));
+    const scale = (Math.min(width, height) / 2 - 24) / extent;
+    const project = ([x, y]) => [width / 2 + x * scale, height / 2 - y * scale];
+    const interpolate = (start, end) => start.map((value, index) => value * (1 - t) + end[index] * t);
+    const origin = project([0, 0]);
+    const step = 10 ** Math.floor(Math.log10(extent));
+    context.strokeStyle = gridColor;
+    for (let i = -9; i <= 9; i++) {
+      const [x, y] = project([i * step, i * step]);
+      line([x, 0], [x, height]);
+      line([0, y], [width, y]);
+    }
+    context.strokeStyle = muted;
+    line([0, origin[1]], [width, origin[1]]);
+    line([origin[0], 0], [origin[0], height]);
+    context.fillStyle = muted;
+    context.font = '14px system-ui';
+    context.fillText('x₁', width - 23, origin[1] - 7);
+    context.fillText('x₂', origin[0] + 8, 17);
+    context.fillText('0', origin[0] - 14, origin[1] + 16);
+    context.setLineDash([5, 4]);
+    context.lineWidth = 1.5;
+    polygon(square.map(project), false);
+    arrow(origin, project(vector));
+    context.setLineDash([]);
+    context.strokeStyle = accent;
+    context.lineWidth = 2.5;
+    polygon(square.map((point, index) => project(interpolate(point, finalSquare[index]))), true);
+    arrow(origin, project(interpolate(vector, product)));
+  }
+
+  function update() {
+    const [a, b, c, d, x, y] = fields.map(field => field.valueAsNumber);
+    const multiply = ([u, v]) => [a * u + b * v, c * u + d * v];
+    const vector = [x, y];
+    const product = multiply(vector);
+    const finalSquare = square.map(multiply);
+    const det = a * d - b * c;
+    const valid = [a, b, c, d, x, y, det, ...product, ...finalSquare.flat()].every(Number.isFinite);
+    const percent = Number(slider.value);
+    document.querySelector('#percent').value = percent + '%';
+    slider.setAttribute('aria-valuetext', percent + '%');
+    error.hidden = valid;
+    error.textContent = valid ? '' : '각 칸에 계산 가능한 숫자를 입력해 주세요.';
+    const results = {
+      product: valid ? pair(product) : '—',
+      determinant: valid ? format(det) : '—',
+      area: valid ? format(Math.abs(det)) : '—',
+      orientation: valid ? (det < 0 ? '뒤집힘' : det > 0 ? '유지' : '넓이 0') : '—'
+    };
+    for (const [id, value] of Object.entries(results)) {
+      const cell = document.getElementById(id);
+      if (cell.textContent !== value) cell.textContent = value;
+    }
+    draw(valid ? vector : null, product, finalSquare, percent / 100);
+    canvas.setAttribute('aria-label', valid
+      ? '벡터 ' + pair(vector) + '에서 ' + pair(product) + '로 변환 중, ' + percent + '%'
+      : '입력 오류로 그래프를 표시할 수 없습니다.');
+  }
+
+  fields.forEach(field => field.addEventListener('input', update));
+  slider.addEventListener('input', update);
+  document.querySelectorAll('[data-matrix]').forEach(button => button.addEventListener('click', () => {
+    button.dataset.matrix.split(',').forEach((value, index) => { fields[index].value = value; });
+    slider.value = 100;
+    update();
+  }));
+  new ResizeObserver(update).observe(canvas);
+  update();
+</script>
+</html>
+
